@@ -156,7 +156,7 @@ export default function NewQRPage() {
   if (savedContent) {
     return (
       <div style={{ minHeight: "100vh", background: "var(--color-surface)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, ease: "easeOut" }}
           style={{
             background: "rgba(255,255,255,0.9)", backdropFilter: "blur(16px)",
             border: "1px solid rgba(25,40,55,0.08)", borderRadius: 24, padding: "40px 32px",
@@ -171,7 +171,7 @@ export default function NewQRPage() {
           </div>
           <h2 style={{ fontFamily: "var(--font-heading)", fontSize: "1.4rem", color: "var(--color-text)", margin: "0 0 6px", letterSpacing: "-0.02em" }}>QR Code Created!</h2>
           <p style={{ fontFamily: "var(--font-body)", fontSize: "0.875rem", color: "var(--color-text)", opacity: 0.5, margin: "0 0 24px" }}>Your QR code is live and ready to share.</p>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 24, padding: 14, background: "#fff", border: "1px solid rgba(25,40,55,0.06)", borderRadius: 16, display: "inline-block" }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 24, padding: 14, background: "#fff", border: "1px solid rgba(25,40,55,0.06)", borderRadius: 16 }}>
             <QRCodeCanvas value={savedContent} size={180} fgColor={fgColor} bgColor={bgColor} imageSettings={logoDataUrl ? { src: logoDataUrl, height: 36, width: 36, excavate: true } : undefined} />
           </div>
           <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}

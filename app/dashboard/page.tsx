@@ -38,11 +38,11 @@ const typeLabels: Record<string, { label: string; color: string }> = {
   file: { label: "File", color: "#8B5CF6" },
 };
 
-const fadeUp = {
+const fadeUp: any = {
   hidden: { opacity: 0, y: 16 },
   visible: (i: number) => ({
     opacity: 1, y: 0,
-    transition: { delay: i * 0.06, duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+    transition: { delay: i * 0.06, duration: 0.45, ease: "easeOut" },
   }),
 };
 
@@ -173,7 +173,7 @@ export default function DashboardPage() {
 
       <main style={{ maxWidth: 1280, margin: "0 auto", padding: "32px 24px" }}>
         {/* Stats strip */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: "easeOut" }}
           style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 28 }}
         >
           {[

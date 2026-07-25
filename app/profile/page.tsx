@@ -89,7 +89,7 @@ export default function ProfilePage() {
       </header>
 
       <main style={{ maxWidth: 520, margin: "40px auto", padding: "0 24px" }}>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: "easeOut" }}
           style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(12px)", border: "1px solid rgba(25,40,55,0.08)", borderRadius: 24, padding: 32, boxShadow: "0 8px 40px rgba(25,40,55,0.06)" }}
         >
           {/* Avatar */}

@@ -88,7 +88,7 @@ export default function EditQRPage() {
       </header>
 
       <main style={{ maxWidth: 560, margin: "40px auto", padding: "0 24px" }}>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: "easeOut" }}
           style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(12px)", border: "1px solid rgba(25,40,55,0.08)", borderRadius: 20, padding: 32, boxShadow: "0 8px 40px rgba(25,40,55,0.06)" }}
         >
           <h1 style={{ fontFamily: "var(--font-heading)", fontSize: "1.4rem", color: "var(--color-text)", margin: "0 0 6px", letterSpacing: "-0.02em" }}>Edit QR Code</h1>
