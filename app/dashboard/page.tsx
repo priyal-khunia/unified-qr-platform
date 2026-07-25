@@ -1,0 +1,438 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { onAuthStateChanged, signOut, User } from "firebase/auth";
+import { collection, query, where, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { auth, db } from "../lib/firebase";
+import { QRCodeCanvas } from "qrcode.react";
+import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Plus, Search, LogOut, User as UserIcon, Download,
+  Copy, Trash2, BarChart2, Edit2, QrCode, Filter,
+} from "lucide-react";
+import Logo from "../components/Logo";
+
+interface QRCode {
+  id: string;
+  title: string;
+  type: string;
+  destination: string;
+  shortCode?: string;
+  scanCount?: number;
+  fgColor?: string;
+  bgColor?: string;
+  logoUrl?: string;
+}
+
+const typeLabels: Record<string, { label: string; color: string }> = {
+  url: { label: "Website", color: "#7342E2" },
+  whatsapp: { label: "WhatsApp", color: "#25D366" },
+  phone: { label: "Phone", color: "#42A5E2" },
+  email: { label: "Email", color: "#E27342" },
+  multi_link: { label: "Multi-Link", color: "#E2A542" },
+  upi: { label: "UPI", color: "#0D9488" },
+  maps: { label: "Maps", color: "#E24242" },
+  business_card: { label: "Business Card", color: "#6B7280" },
+  file: { label: "File", color: "#8B5CF6" },
+};
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 16 },
+  visible: (i: number) => ({
+    opacity: 1, y: 0,
+    transition: { delay: i * 0.06, duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+  }),
+};
+
+export default function DashboardPage() {
+  const [user, setUser] = useState<User | null>(null);
+  const [qrCodes, setQrCodes] = useState<QRCode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [copyMsg, setCopyMsg] = useState<string | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        await fetchQRCodes(currentUser.uid);
+        setLoading(false);
+      } else {
+        router.push("/login");
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
+
+  const fetchQRCodes = async (uid: string) => {
+    const q = query(collection(db, "qrcodes"), where("userId", "==", uid));
+    const snapshot = await getDocs(q);
+    const list = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as QRCode[];
+    const listWithCounts = await Promise.all(
+      list.map(async (qr) => {
+        const scansQuery = query(collection(db, "scans"), where("qrId", "==", qr.id));
+        const scansSnapshot = await getDocs(scansQuery);
+        return { ...qr, scanCount: scansSnapshot.size };
+      })
+    );
+    setQrCodes(listWithCounts);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete this QR code?")) return;
+    await deleteDoc(doc(db, "qrcodes", id));
+    if (user) await fetchQRCodes(user.uid);
+  };
+
+  const downloadQR = (id: string, title: string) => {
+    const canvas = document.getElementById(`qr-${id}`) as HTMLCanvasElement;
+    if (!canvas) return;
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = `${title || "qr-code"}.png`;
+    link.click();
+  };
+
+  const copyLink = (shortCode: string | undefined) => {
+    if (!shortCode) { alert("This QR code doesn't have a shareable link."); return; }
+    navigator.clipboard.writeText(`${window.location.origin}/r/${shortCode}`);
+    setCopyMsg(shortCode);
+    setTimeout(() => setCopyMsg(null), 2000);
+  };
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    router.push("/login");
+  };
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: "var(--color-login-bg)" }}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid rgba(115,66,226,0.2)", borderTopColor: "#7342E2", animation: "spin 0.8s linear infinite" }} />
+          <p style={{ fontFamily: "var(--font-body)", fontSize: "0.875rem", color: "var(--color-text)", opacity: 0.5 }}>Loading your vault…</p>
+        </motion.div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  const filteredQRCodes = qrCodes.filter((qr) => {
+    const matchesSearch = qr.title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = typeFilter === "all" || qr.type === typeFilter;
+    return matchesSearch && matchesType;
+  });
+
+  const totalScans = qrCodes.reduce((sum, qr) => sum + (qr.scanCount ?? 0), 0);
+
+  return (
+    <div style={{ minHeight: "100vh", background: "var(--color-surface)" }}>
+      {/* Header */}
+      <header style={{
+        background: "rgba(242,242,238,0.85)", backdropFilter: "blur(16px)",
+        borderBottom: "1px solid rgba(25,40,55,0.08)",
+        position: "sticky", top: 0, zIndex: 20,
+      }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px", height: 60, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Link href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
+            <Logo size={24} color="#192837" />
+            <span style={{ fontFamily: "var(--font-heading)", fontSize: "1rem", color: "var(--color-text)", letterSpacing: "-0.02em" }}>QRcraft</span>
+          </Link>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="hidden sm:block" style={{ fontFamily: "var(--font-body)", fontSize: "0.8rem", color: "var(--color-text)", opacity: 0.45 }}>
+              {user?.email}
+            </span>
+            <Link href="/profile">
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                style={{
+                  width: 34, height: 34, borderRadius: "50%", background: "rgba(25,40,55,0.08)",
+                  border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "var(--color-text)",
+                }}
+              >
+                <UserIcon size={16} />
+              </motion.button>
+            </Link>
+            <motion.button onClick={handleLogout} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)",
+                color: "#DC2626", fontFamily: "var(--font-body)", fontSize: "0.8rem", fontWeight: 600,
+                padding: "7px 14px", borderRadius: 50, cursor: "pointer",
+              }}
+            >
+              <LogOut size={13} /> <span className="hidden sm:inline">Log out</span>
+            </motion.button>
+          </div>
+        </div>
+      </header>
+
+      <main style={{ maxWidth: 1280, margin: "0 auto", padding: "32px 24px" }}>
+        {/* Stats strip */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 28 }}
+        >
+          {[
+            { label: "Total QR Codes", value: qrCodes.length, color: "#7342E2" },
+            { label: "Total Scans", value: totalScans, color: "#42A5E2" },
+            { label: "QR Types Used", value: new Set(qrCodes.map(q => q.type)).size, color: "#0D9488" },
+          ].map((stat) => (
+            <div key={stat.label} style={{
+              background: "rgba(255,255,255,0.8)", backdropFilter: "blur(12px)",
+              border: "1px solid rgba(25,40,55,0.08)", borderRadius: 16,
+              padding: "18px 20px",
+            }}>
+              <p style={{ fontFamily: "var(--font-heading)", fontSize: "1.8rem", color: stat.color, margin: "0 0 4px", letterSpacing: "-0.03em" }}>
+                {stat.value}
+              </p>
+              <p style={{ fontFamily: "var(--font-body)", fontSize: "0.78rem", color: "var(--color-text)", opacity: 0.5, margin: 0 }}>
+                {stat.label}
+              </p>
+            </div>
+          ))}
+        </motion.div>
+
+        {/* Toolbar */}
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.5 }}
+          style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}
+        >
+          <h2 style={{ fontFamily: "var(--font-heading)", fontSize: "1.15rem", color: "var(--color-text)", margin: 0, letterSpacing: "-0.02em", flex: 1, minWidth: 120 }}>
+            Your QR Codes
+          </h2>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {/* Search */}
+            <div style={{ position: "relative" }}>
+              <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "rgba(25,40,55,0.35)", pointerEvents: "none" }} />
+              <input
+                type="text" placeholder="Search…" value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  paddingLeft: 34, paddingRight: 14, paddingTop: 9, paddingBottom: 9,
+                  fontFamily: "var(--font-body)", fontSize: "0.85rem", color: "var(--color-text)",
+                  background: "rgba(255,255,255,0.8)", border: "1.5px solid rgba(25,40,55,0.1)",
+                  borderRadius: 50, outline: "none", width: 180,
+                  transition: "border-color 0.15s, box-shadow 0.15s",
+                }}
+                onFocus={e => { e.target.style.borderColor = "#7342E2"; e.target.style.boxShadow = "0 0 0 3px rgba(115,66,226,0.08)"; }}
+                onBlur={e => { e.target.style.borderColor = "rgba(25,40,55,0.1)"; e.target.style.boxShadow = "none"; }}
+              />
+            </div>
+            {/* Filter */}
+            <div style={{ position: "relative" }}>
+              <Filter size={13} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "rgba(25,40,55,0.35)", pointerEvents: "none" }} />
+              <select
+                value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
+                style={{
+                  paddingLeft: 32, paddingRight: 28, paddingTop: 9, paddingBottom: 9,
+                  fontFamily: "var(--font-body)", fontSize: "0.85rem", color: "var(--color-text)",
+                  background: "rgba(255,255,255,0.8)", border: "1.5px solid rgba(25,40,55,0.1)",
+                  borderRadius: 50, outline: "none", appearance: "none", cursor: "pointer",
+                }}
+              >
+                <option value="all">All Types</option>
+                <option value="url">Website URL</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="phone">Phone Call</option>
+                <option value="email">Email</option>
+                <option value="multi_link">Multi-Link</option>
+                <option value="upi">UPI Payment</option>
+                <option value="maps">Maps</option>
+                <option value="business_card">Business Card</option>
+                <option value="file">File</option>
+              </select>
+            </div>
+            {/* Create */}
+            <Link href="/dashboard/new">
+              <motion.button whileHover={{ scale: 1.03, filter: "brightness(1.08)" }} whileTap={{ scale: 0.97 }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  background: "#7342E2", color: "#fff",
+                  fontFamily: "var(--font-body)", fontSize: "0.85rem", fontWeight: 600,
+                  padding: "9px 18px", borderRadius: 50, border: "none", cursor: "pointer",
+                  boxShadow: "0 4px 16px rgba(115,66,226,0.25)",
+                }}
+              >
+                <Plus size={15} /> Create QR
+              </motion.button>
+            </Link>
+          </div>
+        </motion.div>
+
+        {/* Grid */}
+        {filteredQRCodes.length === 0 ? (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.5 }}
+            style={{
+              background: "rgba(255,255,255,0.7)", backdropFilter: "blur(12px)",
+              border: "1px solid rgba(25,40,55,0.08)", borderRadius: 20,
+              padding: "64px 24px", textAlign: "center",
+            }}
+          >
+            <div style={{
+              width: 64, height: 64, borderRadius: 18, background: "rgba(115,66,226,0.08)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              margin: "0 auto 16px",
+            }}>
+              <QrCode size={28} color="#7342E2" style={{ opacity: 0.5 }} />
+            </div>
+            <p style={{ fontFamily: "var(--font-heading)", fontSize: "1.05rem", color: "var(--color-text)", margin: "0 0 8px" }}>
+              {searchTerm || typeFilter !== "all" ? "No QR codes match your search" : "No QR codes yet"}
+            </p>
+            <p style={{ fontFamily: "var(--font-body)", fontSize: "0.875rem", color: "var(--color-text)", opacity: 0.5, margin: "0 0 20px" }}>
+              {searchTerm || typeFilter !== "all" ? "Try a different keyword or filter." : "Create your first QR code and start tracking scans."}
+            </p>
+            {!searchTerm && typeFilter === "all" && (
+              <Link href="/dashboard/new">
+                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                  style={{
+                    background: "#7342E2", color: "#fff", fontFamily: "var(--font-body)", fontSize: "0.875rem",
+                    fontWeight: 600, padding: "11px 24px", borderRadius: 50, border: "none", cursor: "pointer",
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    boxShadow: "0 4px 16px rgba(115,66,226,0.25)",
+                  }}
+                >
+                  <Plus size={15} /> Create your first QR
+                </motion.button>
+              </Link>
+            )}
+          </motion.div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
+            <AnimatePresence>
+              {filteredQRCodes.map((qr, i) => {
+                const typeInfo = typeLabels[qr.type] || { label: qr.type, color: "#6B7280" };
+                return (
+                  <motion.div
+                    key={qr.id}
+                    custom={i}
+                    initial="hidden"
+                    animate="visible"
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    variants={fadeUp}
+                    whileHover={{ y: -4, boxShadow: "0 16px 48px rgba(25,40,55,0.1)" }}
+                    style={{
+                      background: "rgba(255,255,255,0.85)", backdropFilter: "blur(12px)",
+                      border: "1px solid rgba(25,40,55,0.08)", borderRadius: 18,
+                      padding: 20, display: "flex", flexDirection: "column", alignItems: "center",
+                      cursor: "default",
+                    }}
+                  >
+                    {/* Type badge */}
+                    <div style={{ alignSelf: "flex-start", marginBottom: 14 }}>
+                      <span style={{
+                        display: "inline-block", background: `${typeInfo.color}15`,
+                        color: typeInfo.color, fontFamily: "var(--font-body)",
+                        fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.04em",
+                        textTransform: "uppercase", padding: "3px 10px", borderRadius: 50,
+                      }}>
+                        {typeInfo.label}
+                      </span>
+                    </div>
+
+                    {/* QR Code */}
+                    <div style={{
+                      padding: 10, background: "#fff",
+                      border: "1px solid rgba(25,40,55,0.06)", borderRadius: 12, marginBottom: 14,
+                    }}>
+                      <QRCodeCanvas
+                        id={`qr-${qr.id}`}
+                        value={qr.destination || `${window.location.origin}/r/${qr.shortCode}`}
+                        size={100}
+                        fgColor={qr.fgColor || "#192837"}
+                        bgColor={qr.bgColor || "#ffffff"}
+                        imageSettings={qr.logoUrl ? { src: qr.logoUrl, height: 22, width: 22, excavate: true } : undefined}
+                      />
+                    </div>
+
+                    <p style={{ fontFamily: "var(--font-heading)", fontSize: "0.9rem", color: "var(--color-text)", margin: "0 0 4px", textAlign: "center", letterSpacing: "-0.01em" }}>
+                      {qr.title}
+                    </p>
+                    {qr.destination && (
+                      <p style={{ fontFamily: "var(--font-body)", fontSize: "0.7rem", color: "var(--color-text)", opacity: 0.4, margin: "0 0 4px", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "center" }}>
+                        {qr.destination}
+                      </p>
+                    )}
+
+                    {/* Scan count */}
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 5, marginBottom: 14,
+                      background: "rgba(13,148,136,0.08)", borderRadius: 50, padding: "3px 10px",
+                    }}>
+                      <BarChart2 size={12} color="#0D9488" />
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: "0.72rem", fontWeight: 600, color: "#0D9488" }}>
+                        {qr.scanCount ?? 0} scan{qr.scanCount !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{
+                      display: "flex", gap: 6, width: "100%",
+                      paddingTop: 12, borderTop: "1px solid rgba(25,40,55,0.06)",
+                      justifyContent: "center", flexWrap: "wrap",
+                    }}>
+                      {[
+                        { icon: Edit2, label: "Edit", href: `/dashboard/edit/${qr.id}`, color: "rgba(25,40,55,0.5)" },
+                        { icon: BarChart2, label: "Stats", href: `/dashboard/analytics/${qr.id}`, color: "rgba(25,40,55,0.5)" },
+                      ].map(({ icon: Icon, label, href, color }) => (
+                        <Link key={label} href={href}>
+                          <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.93 }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 4,
+                              background: "rgba(25,40,55,0.05)", border: "none", cursor: "pointer",
+                              padding: "6px 10px", borderRadius: 8, color,
+                              fontFamily: "var(--font-body)", fontSize: "0.72rem", fontWeight: 500,
+                            }}
+                          >
+                            <Icon size={12} /> {label}
+                          </motion.button>
+                        </Link>
+                      ))}
+                      <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.93 }}
+                        onClick={() => copyLink(qr.shortCode)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 4,
+                          background: copyMsg === qr.shortCode ? "rgba(13,148,136,0.1)" : "rgba(25,40,55,0.05)",
+                          border: "none", cursor: "pointer", padding: "6px 10px", borderRadius: 8,
+                          color: copyMsg === qr.shortCode ? "#0D9488" : "rgba(25,40,55,0.5)",
+                          fontFamily: "var(--font-body)", fontSize: "0.72rem", fontWeight: 500,
+                          transition: "background 0.2s, color 0.2s",
+                        }}
+                      >
+                        <Copy size={12} /> {copyMsg === qr.shortCode ? "Copied!" : "Copy"}
+                      </motion.button>
+                      <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.93 }}
+                        onClick={() => downloadQR(qr.id, qr.title)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 4,
+                          background: "rgba(25,40,55,0.05)", border: "none", cursor: "pointer",
+                          padding: "6px 10px", borderRadius: 8, color: "rgba(25,40,55,0.5)",
+                          fontFamily: "var(--font-body)", fontSize: "0.72rem", fontWeight: 500,
+                        }}
+                      >
+                        <Download size={12} /> Save
+                      </motion.button>
+                      <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.93 }}
+                        onClick={() => handleDelete(qr.id)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 4,
+                          background: "rgba(239,68,68,0.06)", border: "none", cursor: "pointer",
+                          padding: "6px 10px", borderRadius: 8, color: "#EF4444",
+                          fontFamily: "var(--font-body)", fontSize: "0.72rem", fontWeight: 500,
+                        }}
+                      >
+                        <Trash2 size={12} /> Delete
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
