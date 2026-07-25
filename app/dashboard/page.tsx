@@ -2,17 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged, signOut, User } from "firebase/auth";
+import { User } from "firebase/auth";
 import { collection, query, where, getDocs, deleteDoc, doc } from "firebase/firestore";
-import { auth, db } from "../lib/firebase";
+import { auth, db, SITE_URL } from "../lib/firebase";
 import { QRCodeCanvas } from "qrcode.react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { useToast } from "../components/Toast";
 import {
-  Plus, Search, LogOut, User as UserIcon, Download,
-  Copy, Trash2, BarChart2, Edit2, QrCode, Filter,
+  Link2, MessageCircle, Phone, Mail, Shuffle, IndianRupee, MapPin, IdCard, Paperclip, Search, Filter, Plus, Pencil, BarChart3, Copy, Download, Trash2, Edit2, BarChart2
 } from "lucide-react";
-import Logo from "../components/Logo";
 
 interface QRCode {
   id: string;
@@ -38,6 +37,22 @@ const typeLabels: Record<string, { label: string; color: string }> = {
   file: { label: "File", color: "#8B5CF6" },
 };
 
+const getTypeIcon = (type: string) => {
+  const icons: Record<string, React.ElementType> = {
+    url: Link2,
+    whatsapp: MessageCircle,
+    phone: Phone,
+    email: Mail,
+    multi_link: Shuffle,
+    upi: IndianRupee,
+    maps: MapPin,
+    business_card: IdCard,
+    file: Paperclip,
+  };
+  const Icon = icons[type] || Link2;
+  return <Icon size={12} strokeWidth={2.5} />;
+};
+
 const fadeUp: any = {
   hidden: { opacity: 0, y: 16 },
   visible: (i: number) => ({
@@ -49,24 +64,17 @@ const fadeUp: any = {
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [qrCodes, setQrCodes] = useState<QRCode[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
-  const router = useRouter();
+  const { showToast } = useToast();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-        await fetchQRCodes(currentUser.uid);
-        setLoading(false);
-      } else {
-        router.push("/login");
-      }
-    });
-    return () => unsubscribe();
-  }, [router]);
+    if (auth.currentUser) {
+      setUser(auth.currentUser);
+      fetchQRCodes(auth.currentUser.uid);
+    }
+  }, []);
 
   const fetchQRCodes = async (uid: string) => {
     const q = query(collection(db, "qrcodes"), where("userId", "==", uid));
@@ -98,28 +106,14 @@ export default function DashboardPage() {
   };
 
   const copyLink = (shortCode: string | undefined) => {
-    if (!shortCode) { alert("This QR code doesn't have a shareable link."); return; }
-    navigator.clipboard.writeText(`${window.location.origin}/r/${shortCode}`);
+    if (!shortCode) { showToast("This QR code doesn't have a shareable link.", "error"); return; }
+    navigator.clipboard.writeText(`${SITE_URL}/r/${shortCode}`);
+    showToast("Link copied to clipboard!");
     setCopyMsg(shortCode);
     setTimeout(() => setCopyMsg(null), 2000);
   };
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    router.push("/login");
-  };
 
-  if (loading) {
-    return (
-      <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: "var(--color-login-bg)" }}>
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid rgba(115,66,226,0.2)", borderTopColor: "#7342E2", animation: "spin 0.8s linear infinite" }} />
-          <p style={{ fontFamily: "var(--font-body)", fontSize: "0.875rem", color: "var(--color-text)", opacity: 0.5 }}>Loading your vault…</p>
-        </motion.div>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
 
   const filteredQRCodes = qrCodes.filter((qr) => {
     const matchesSearch = qr.title.toLowerCase().includes(searchTerm.toLowerCase());
@@ -130,46 +124,7 @@ export default function DashboardPage() {
   const totalScans = qrCodes.reduce((sum, qr) => sum + (qr.scanCount ?? 0), 0);
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--color-surface)" }}>
-      {/* Header */}
-      <header style={{
-        background: "rgba(242,242,238,0.85)", backdropFilter: "blur(16px)",
-        borderBottom: "1px solid rgba(25,40,55,0.08)",
-        position: "sticky", top: 0, zIndex: 20,
-      }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px", height: 60, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Link href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
-            <Logo size={24} color="#192837" />
-            <span style={{ fontFamily: "var(--font-heading)", fontSize: "1rem", color: "var(--color-text)", letterSpacing: "-0.02em" }}>QRcraft</span>
-          </Link>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className="hidden sm:block" style={{ fontFamily: "var(--font-body)", fontSize: "0.8rem", color: "var(--color-text)", opacity: 0.45 }}>
-              {user?.email}
-            </span>
-            <Link href="/profile">
-              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                style={{
-                  width: 34, height: 34, borderRadius: "50%", background: "rgba(25,40,55,0.08)",
-                  border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "var(--color-text)",
-                }}
-              >
-                <UserIcon size={16} />
-              </motion.button>
-            </Link>
-            <motion.button onClick={handleLogout} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)",
-                color: "#DC2626", fontFamily: "var(--font-body)", fontSize: "0.8rem", fontWeight: 600,
-                padding: "7px 14px", borderRadius: 50, cursor: "pointer",
-              }}
-            >
-              <LogOut size={13} /> <span className="hidden sm:inline">Log out</span>
-            </motion.button>
-          </div>
-        </div>
-      </header>
+    <div className="w-full">
 
       <main style={{ maxWidth: 1280, margin: "0 auto", padding: "32px 24px" }}>
         {/* Stats strip */}
@@ -203,9 +158,9 @@ export default function DashboardPage() {
           <h2 style={{ fontFamily: "var(--font-heading)", fontSize: "1.15rem", color: "var(--color-text)", margin: 0, letterSpacing: "-0.02em", flex: 1, minWidth: 120 }}>
             Your QR Codes
           </h2>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             {/* Search */}
-            <div style={{ position: "relative" }}>
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
               <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "rgba(25,40,55,0.35)", pointerEvents: "none" }} />
               <input
                 type="text" placeholder="Search…" value={searchTerm}
@@ -222,7 +177,7 @@ export default function DashboardPage() {
               />
             </div>
             {/* Filter */}
-            <div style={{ position: "relative" }}>
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
               <Filter size={13} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "rgba(25,40,55,0.35)", pointerEvents: "none" }} />
               <select
                 value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
@@ -246,13 +201,13 @@ export default function DashboardPage() {
               </select>
             </div>
             {/* Create */}
-            <Link href="/dashboard/new">
+            <Link href="/dashboard/new" style={{ display: "flex", alignItems: "center" }}>
               <motion.button whileHover={{ scale: 1.03, filter: "brightness(1.08)" }} whileTap={{ scale: 0.97 }}
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
                   background: "#7342E2", color: "#fff",
                   fontFamily: "var(--font-body)", fontSize: "0.85rem", fontWeight: 600,
-                  padding: "9px 18px", borderRadius: 50, border: "none", cursor: "pointer",
+                  padding: "9px 18px", borderRadius: 50, border: "1.5px solid #7342E2", cursor: "pointer",
                   boxShadow: "0 4px 16px rgba(115,66,226,0.25)",
                 }}
               >
@@ -264,172 +219,157 @@ export default function DashboardPage() {
 
         {/* Grid */}
         {filteredQRCodes.length === 0 ? (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.5 }}
-            style={{
-              background: "rgba(255,255,255,0.7)", backdropFilter: "blur(12px)",
-              border: "1px solid rgba(25,40,55,0.08)", borderRadius: 20,
-              padding: "64px 24px", textAlign: "center",
-            }}
-          >
-            <div style={{
-              width: 64, height: 64, borderRadius: 18, background: "rgba(115,66,226,0.08)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              margin: "0 auto 16px",
-            }}>
-              <QrCode size={28} color="#7342E2" style={{ opacity: 0.5 }} />
-            </div>
-            <p style={{ fontFamily: "var(--font-heading)", fontSize: "1.05rem", color: "var(--color-text)", margin: "0 0 8px" }}>
-              {searchTerm || typeFilter !== "all" ? "No QR codes match your search" : "No QR codes yet"}
-            </p>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: "0.875rem", color: "var(--color-text)", opacity: 0.5, margin: "0 0 20px" }}>
-              {searchTerm || typeFilter !== "all" ? "Try a different keyword or filter." : "Create your first QR code and start tracking scans."}
-            </p>
-            {!searchTerm && typeFilter === "all" && (
-              <Link href="/dashboard/new">
-                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                  style={{
-                    background: "#7342E2", color: "#fff", fontFamily: "var(--font-body)", fontSize: "0.875rem",
-                    fontWeight: 600, padding: "11px 24px", borderRadius: 50, border: "none", cursor: "pointer",
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                    boxShadow: "0 4px 16px rgba(115,66,226,0.25)",
-                  }}
-                >
-                  <Plus size={15} /> Create your first QR
-                </motion.button>
-              </Link>
-            )}
-          </motion.div>
+          <div className="bg-white rounded-xl border border-hairline p-12 flex flex-col items-center text-center">
+            <svg width="56" height="56" viewBox="0 0 56 56" fill="none" className="mb-4 opacity-30">
+              <rect x="2" y="2" width="16" height="16" rx="2" stroke="#18181B" strokeWidth="3"/>
+              <rect x="7" y="7" width="6" height="6" fill="#18181B"/>
+              <rect x="38" y="2" width="16" height="16" rx="2" stroke="#18181B" strokeWidth="3"/>
+              <rect x="43" y="7" width="6" height="6" fill="#18181B"/>
+              <rect x="2" y="38" width="16" height="16" rx="2" stroke="#18181B" strokeWidth="3"/>
+              <rect x="7" y="43" width="6" height="6" fill="#18181B"/>
+            </svg>
+            <p className="text-ink font-medium mb-1">No QR codes match your search</p>
+            <p className="text-muted text-sm">Try a different keyword, or create your first QR code.</p>
+          </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
-            <AnimatePresence>
-              {filteredQRCodes.map((qr, i) => {
-                const typeInfo = typeLabels[qr.type] || { label: qr.type, color: "#6B7280" };
-                return (
-                  <motion.div
-                    key={qr.id}
-                    custom={i}
-                    initial="hidden"
-                    animate="visible"
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    variants={fadeUp}
-                    whileHover={{ y: -4, boxShadow: "0 16px 48px rgba(25,40,55,0.1)" }}
-                    style={{
-                      background: "rgba(255,255,255,0.85)", backdropFilter: "blur(12px)",
-                      border: "1px solid rgba(25,40,55,0.08)", borderRadius: 18,
-                      padding: 20, display: "flex", flexDirection: "column", alignItems: "center",
-                      cursor: "default",
-                    }}
-                  >
-                    {/* Type badge */}
-                    <div style={{ alignSelf: "flex-start", marginBottom: 14 }}>
-                      <span style={{
-                        display: "inline-block", background: `${typeInfo.color}15`,
-                        color: typeInfo.color, fontFamily: "var(--font-body)",
-                        fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.04em",
-                        textTransform: "uppercase", padding: "3px 10px", borderRadius: 50,
-                      }}>
-                        {typeInfo.label}
-                      </span>
-                    </div>
+          <div className="space-y-10">
+            {Object.entries(
+              filteredQRCodes.reduce((groups: Record<string, typeof filteredQRCodes>, qr) => {
+                const key = qr.type || "other";
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(qr);
+                return groups;
+              }, {})
+            ).map(([type, qrsInGroup]) => (
+              <div key={type}>
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink">
+                    {getTypeIcon(type)} {type.replace("_", " ").toUpperCase()}
+                  </span>
+                  <span className="text-xs text-muted">({qrsInGroup.length})</span>
+                  <div className="flex-1 h-px bg-hairline ml-2" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {qrsInGroup.map((qr, index) => {
+                    const typeInfo = typeLabels[qr.type] || { label: qr.type, color: "#6B7280" };
+                    return (
+                      <div
+                        key={qr.id}
+                        style={{ animationDelay: `${index * 60}ms` }}
+                        className="bg-white rounded-xl border border-hairline p-5 flex flex-col items-center hover:shadow-lg hover:-translate-y-1 hover:border-gray-300 transition-all duration-200 animate-[fadeInUp_0.4s_ease-out_backwards]"
+                      >
+                        {/* Type badge */}
+                        <div style={{ alignSelf: "flex-start", marginBottom: 14 }}>
+                          <span style={{
+                            display: "inline-flex", alignItems: "center", gap: 4, background: `${typeInfo.color}15`,
+                            color: typeInfo.color, fontFamily: "var(--font-body)",
+                            fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.04em",
+                            textTransform: "uppercase", padding: "3px 10px", borderRadius: 50,
+                          }}>
+                            {getTypeIcon(qr.type)} {qr.type.replace("_", " ").toUpperCase()}
+                          </span>
+                        </div>
 
-                    {/* QR Code */}
-                    <div style={{
-                      padding: 10, background: "#fff",
-                      border: "1px solid rgba(25,40,55,0.06)", borderRadius: 12, marginBottom: 14,
-                    }}>
-                      <QRCodeCanvas
-                        id={`qr-${qr.id}`}
-                        value={qr.destination || `${window.location.origin}/r/${qr.shortCode}`}
-                        size={100}
-                        fgColor={qr.fgColor || "#192837"}
-                        bgColor={qr.bgColor || "#ffffff"}
-                        imageSettings={qr.logoUrl ? { src: qr.logoUrl, height: 22, width: 22, excavate: true } : undefined}
-                      />
-                    </div>
+                        {/* QR Code */}
+                        <div style={{
+                          padding: 10, background: "#fff",
+                          border: "1px solid rgba(25,40,55,0.06)", borderRadius: 12, marginBottom: 14,
+                        }}>
+                          <QRCodeCanvas
+                            id={`qr-${qr.id}`}
+                            value={qr.shortCode ? `${SITE_URL}/r/${qr.shortCode}` : qr.destination}
+                            size={100}
+                            fgColor={qr.fgColor || "#192837"}
+                            bgColor={qr.bgColor || "#ffffff"}
+                            imageSettings={qr.logoUrl ? { src: qr.logoUrl, height: 22, width: 22, excavate: true } : undefined}
+                          />
+                        </div>
 
-                    <p style={{ fontFamily: "var(--font-heading)", fontSize: "0.9rem", color: "var(--color-text)", margin: "0 0 4px", textAlign: "center", letterSpacing: "-0.01em" }}>
-                      {qr.title}
-                    </p>
-                    {qr.destination && (
-                      <p style={{ fontFamily: "var(--font-body)", fontSize: "0.7rem", color: "var(--color-text)", opacity: 0.4, margin: "0 0 4px", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "center" }}>
-                        {qr.destination}
-                      </p>
-                    )}
+                        <p style={{ fontFamily: "var(--font-heading)", fontSize: "0.9rem", color: "var(--color-text)", margin: "0 0 4px", textAlign: "center", letterSpacing: "-0.01em" }}>
+                          {qr.title}
+                        </p>
+                        {qr.destination && (
+                          <p style={{ fontFamily: "var(--font-body)", fontSize: "0.7rem", color: "var(--color-text)", opacity: 0.4, margin: "0 0 4px", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "center" }}>
+                            {qr.destination}
+                          </p>
+                        )}
 
-                    {/* Scan count */}
-                    <div style={{
-                      display: "flex", alignItems: "center", gap: 5, marginBottom: 14,
-                      background: "rgba(13,148,136,0.08)", borderRadius: 50, padding: "3px 10px",
-                    }}>
-                      <BarChart2 size={12} color="#0D9488" />
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: "0.72rem", fontWeight: 600, color: "#0D9488" }}>
-                        {qr.scanCount ?? 0} scan{qr.scanCount !== 1 ? "s" : ""}
-                      </span>
-                    </div>
+                        {/* Scan count */}
+                        <div style={{
+                          display: "flex", alignItems: "center", gap: 5, marginBottom: 14,
+                          background: "rgba(13,148,136,0.08)", borderRadius: 50, padding: "3px 10px",
+                        }}>
+                          <BarChart2 size={12} color="#0D9488" />
+                          <span style={{ fontFamily: "var(--font-body)", fontSize: "0.72rem", fontWeight: 600, color: "#0D9488" }}>
+                            {qr.scanCount ?? 0} scan{qr.scanCount !== 1 ? "s" : ""}
+                          </span>
+                        </div>
 
-                    {/* Actions */}
-                    <div style={{
-                      display: "flex", gap: 6, width: "100%",
-                      paddingTop: 12, borderTop: "1px solid rgba(25,40,55,0.06)",
-                      justifyContent: "center", flexWrap: "wrap",
-                    }}>
-                      {[
-                        { icon: Edit2, label: "Edit", href: `/dashboard/edit/${qr.id}`, color: "rgba(25,40,55,0.5)" },
-                        { icon: BarChart2, label: "Stats", href: `/dashboard/analytics/${qr.id}`, color: "rgba(25,40,55,0.5)" },
-                      ].map(({ icon: Icon, label, href, color }) => (
-                        <Link key={label} href={href}>
+                        {/* Actions */}
+                        <div style={{
+                          display: "flex", gap: 6, width: "100%",
+                          paddingTop: 12, borderTop: "1px solid rgba(25,40,55,0.06)",
+                          justifyContent: "center", flexWrap: "wrap",
+                        }}>
+                          {[
+                            { icon: Edit2, label: "Edit", href: `/dashboard/edit/${qr.id}`, color: "rgba(25,40,55,0.5)" },
+                            { icon: BarChart2, label: "Stats", href: `/dashboard/analytics/${qr.id}`, color: "rgba(25,40,55,0.5)" },
+                          ].map(({ icon: Icon, label, href, color }) => (
+                            <Link key={label} href={href}>
+                              <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.93 }}
+                                style={{
+                                  display: "flex", alignItems: "center", gap: 4,
+                                  background: "rgba(25,40,55,0.05)", border: "none", cursor: "pointer",
+                                  padding: "6px 10px", borderRadius: 8, color,
+                                  fontFamily: "var(--font-body)", fontSize: "0.72rem", fontWeight: 500,
+                                }}
+                              >
+                                <Icon size={12} /> {label}
+                              </motion.button>
+                            </Link>
+                          ))}
                           <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.93 }}
+                            onClick={() => copyLink(qr.shortCode)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 4,
+                              background: copyMsg === qr.shortCode ? "rgba(13,148,136,0.1)" : "rgba(25,40,55,0.05)",
+                              border: "none", cursor: "pointer", padding: "6px 10px", borderRadius: 8,
+                              color: copyMsg === qr.shortCode ? "#0D9488" : "rgba(25,40,55,0.5)",
+                              fontFamily: "var(--font-body)", fontSize: "0.72rem", fontWeight: 500,
+                              transition: "background 0.2s, color 0.2s",
+                            }}
+                          >
+                            <Copy size={12} /> {copyMsg === qr.shortCode ? "Copied!" : "Copy"}
+                          </motion.button>
+                          <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.93 }}
+                            onClick={() => downloadQR(qr.id, qr.title)}
                             style={{
                               display: "flex", alignItems: "center", gap: 4,
                               background: "rgba(25,40,55,0.05)", border: "none", cursor: "pointer",
-                              padding: "6px 10px", borderRadius: 8, color,
+                              padding: "6px 10px", borderRadius: 8, color: "rgba(25,40,55,0.5)",
                               fontFamily: "var(--font-body)", fontSize: "0.72rem", fontWeight: 500,
                             }}
                           >
-                            <Icon size={12} /> {label}
+                            <Download size={12} /> Save
                           </motion.button>
-                        </Link>
-                      ))}
-                      <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.93 }}
-                        onClick={() => copyLink(qr.shortCode)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 4,
-                          background: copyMsg === qr.shortCode ? "rgba(13,148,136,0.1)" : "rgba(25,40,55,0.05)",
-                          border: "none", cursor: "pointer", padding: "6px 10px", borderRadius: 8,
-                          color: copyMsg === qr.shortCode ? "#0D9488" : "rgba(25,40,55,0.5)",
-                          fontFamily: "var(--font-body)", fontSize: "0.72rem", fontWeight: 500,
-                          transition: "background 0.2s, color 0.2s",
-                        }}
-                      >
-                        <Copy size={12} /> {copyMsg === qr.shortCode ? "Copied!" : "Copy"}
-                      </motion.button>
-                      <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.93 }}
-                        onClick={() => downloadQR(qr.id, qr.title)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 4,
-                          background: "rgba(25,40,55,0.05)", border: "none", cursor: "pointer",
-                          padding: "6px 10px", borderRadius: 8, color: "rgba(25,40,55,0.5)",
-                          fontFamily: "var(--font-body)", fontSize: "0.72rem", fontWeight: 500,
-                        }}
-                      >
-                        <Download size={12} /> Save
-                      </motion.button>
-                      <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.93 }}
-                        onClick={() => handleDelete(qr.id)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 4,
-                          background: "rgba(239,68,68,0.06)", border: "none", cursor: "pointer",
-                          padding: "6px 10px", borderRadius: 8, color: "#EF4444",
-                          fontFamily: "var(--font-body)", fontSize: "0.72rem", fontWeight: 500,
-                        }}
-                      >
-                        <Trash2 size={12} /> Delete
-                      </motion.button>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
+                          <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.93 }}
+                            onClick={() => handleDelete(qr.id)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 4,
+                              background: "rgba(239,68,68,0.06)", border: "none", cursor: "pointer",
+                              padding: "6px 10px", borderRadius: 8, color: "#EF4444",
+                              fontFamily: "var(--font-body)", fontSize: "0.72rem", fontWeight: 500,
+                            }}
+                          >
+                            <Trash2 size={12} /> Delete
+                          </motion.button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </main>

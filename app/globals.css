@@ -25,6 +25,12 @@
   --color-accent: #7342E2;
   --color-accent-soft: rgba(115, 66, 226, 0.1);
   --color-positive: #0D9488;
+  --animate-fadeInUp: fadeInUp 0.4s ease-out backwards;
+}
+
+@keyframes fadeInUp {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 * {

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "../../lib/firebase";
+import { auth, db, SITE_URL } from "../../lib/firebase";
 import { QRCodeCanvas } from "qrcode.react";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "../../lib/firebase";
@@ -142,7 +142,7 @@ export default function NewQRPage() {
         const destination = buildDestination();
         await addDoc(collection(db, "qrcodes"), { userId: user.uid, title, type, destination, shortCode, fgColor, bgColor, logoUrl: logoDataUrl, createdAt: serverTimestamp() });
       }
-      setSavedContent(`${window.location.origin}/r/${shortCode}`);
+      setSavedContent(`${SITE_URL}/r/${shortCode}`);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -164,27 +164,62 @@ export default function NewQRPage() {
             boxShadow: "0 24px 80px rgba(25,40,55,0.1)",
           }}
         >
-          <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(13,148,136,0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2, type: "spring", stiffness: 200 }}>
-              <ChevronRight size={28} color="#0D9488" />
-            </motion.div>
+          <div className="text-center">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-emerald-50 flex items-center justify-center">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <path d="M5 13l4 4L19 7" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h2 className="text-2xl font-semibold text-ink tracking-tight mb-1">QR Code Created!</h2>
+            <p className="text-muted text-sm mb-1">{title}</p>
+            <p className="text-muted text-xs mb-6">Your QR code is live and ready to share.</p>
+            <div className="flex justify-center mb-6">
+              <div className="p-4 bg-white border border-hairline rounded-xl">
+                <QRCodeCanvas
+                  id="generated-qr"
+                  value={savedContent}
+                  size={200}
+                  fgColor={fgColor}
+                  bgColor={bgColor}
+                  imageSettings={
+                    logoDataUrl
+                      ? { src: logoDataUrl, height: 40, width: 40, excavate: true }
+                      : undefined
+                  }
+                />
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={() => {
+                  const canvas = document.getElementById("generated-qr") as HTMLCanvasElement;
+                  if (!canvas) return;
+                  const url = canvas.toDataURL("image/png");
+                  const link = document.createElement("a");
+                  link.href = url;
+                  link.download = `${title || "qr-code"}.png`;
+                  link.click();
+                }}
+                className="flex-1 border border-hairline text-ink py-2.5 rounded-lg text-sm font-medium hover:bg-[#FAFAFA] transition-colors duration-150"
+              >
+                Download PNG
+              </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(savedContent);
+                }}
+                className="flex-1 border border-hairline text-ink py-2.5 rounded-lg text-sm font-medium hover:bg-[#FAFAFA] transition-colors duration-150"
+              >
+                Copy Link
+              </button>
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="flex-1 bg-ink text-white py-2.5 rounded-lg text-sm font-medium hover:bg-accent transition-colors duration-150"
+              >
+                Back to Dashboard
+              </button>
+            </div>
           </div>
-          <h2 style={{ fontFamily: "var(--font-heading)", fontSize: "1.4rem", color: "var(--color-text)", margin: "0 0 6px", letterSpacing: "-0.02em" }}>QR Code Created!</h2>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: "0.875rem", color: "var(--color-text)", opacity: 0.5, margin: "0 0 24px" }}>Your QR code is live and ready to share.</p>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 24, padding: 14, background: "#fff", border: "1px solid rgba(25,40,55,0.06)", borderRadius: 16 }}>
-            <QRCodeCanvas value={savedContent} size={180} fgColor={fgColor} bgColor={bgColor} imageSettings={logoDataUrl ? { src: logoDataUrl, height: 36, width: 36, excavate: true } : undefined} />
-          </div>
-          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-            onClick={() => router.push("/dashboard")}
-            style={{
-              width: "100%", background: "#7342E2", color: "#fff",
-              fontFamily: "var(--font-body)", fontSize: "0.9rem", fontWeight: 600,
-              padding: "13px 20px", borderRadius: 50, border: "none", cursor: "pointer",
-              boxShadow: "0 4px 20px rgba(115,66,226,0.25)",
-            }}
-          >
-            Back to Dashboard
-          </motion.button>
         </motion.div>
       </div>
     );
